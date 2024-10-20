@@ -34,7 +34,7 @@ class MakeCrudCommand extends Command
     /**
      * Execute the console command.
      */
-    public function handle()
+    public function handle(): void
     {
         // Prepare structure
         $model = ucfirst($this->argument('model'));
@@ -53,21 +53,23 @@ class MakeCrudCommand extends Command
     /**
      * Method to append Routes to api.php file (Laravel)
      *
-     * @param $model
+     * @param string $model
      */
-    private function appendRoute($model)
+    private function appendRoute(string $model): void
     {
         $plural = strtolower(Str::plural($model));
         $route = <<<EOF
 
+use App\Http\Controllers\Api\{$model}Controller;
+
 /*
-|--------------------------------------------------------------------------
-| {$model} Routes
-|--------------------------------------------------------------------------
+|--------------------------------------------------------------------------|
+| {$model} Routes                                                          |
+|--------------------------------------------------------------------------|
 */
-Route::resource('{$plural}', '{$model}Controller');
+Route::resource('{$plural}', {$model}Controller::class);
 EOF;
-        file_put_contents(app_path() . DIRECTORY_SEPARATOR . '..' . DIRECTORY_SEPARATOR . 'routes' . DIRECTORY_SEPARATOR . 'api.php', $route . PHP_EOL, FILE_APPEND | LOCK_EX);
+        file_put_contents(base_path('routes/api.php'), $route . PHP_EOL, FILE_APPEND | LOCK_EX);
     }
 
     /**
@@ -75,7 +77,7 @@ EOF;
      *
      * @param string $model
      */
-    private function makeController(string $model)
+    private function makeController(string $model): void
     {
         $service = $model . 'Service';
         $request = $model . 'Request';
@@ -86,12 +88,11 @@ namespace App\Http\Controllers\Api;
 
 use App\Services\\$service;
 use App\Http\Requests\\$request;
-use LaravelAux\BaseController;
 
 class {$model}Controller extends BaseController
 {
     /**
-     * UserController constructor.
+     * {$model}Controller constructor.
      *
      * @param {$service} \$service
      * @param {$request} \$request
@@ -102,7 +103,7 @@ class {$model}Controller extends BaseController
     }
 }
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'Controllers' . DIRECTORY_SEPARATOR . 'Api' . DIRECTORY_SEPARATOR . $model . 'Controller.php', $controller);
+        file_put_contents(app_path("Http/Controllers/Api/{$model}Controller.php"), $controller);
     }
 
     /**
@@ -110,14 +111,12 @@ EOF;
      *
      * @param string $model
      */
-    private function makeRequest(string $model)
+    private function makeRequest(string $model): void
     {
         $request = <<<EOF
 <?php
 
 namespace App\Http\Requests;
-
-use LaravelAux\BaseRequest;
 
 class {$model}Request extends BaseRequest
 {
@@ -126,7 +125,7 @@ class {$model}Request extends BaseRequest
      *
      * @return array
      */
-    public function rules()
+    public function rules(): array
     {
         return [
             'title' => 'required',
@@ -139,7 +138,7 @@ class {$model}Request extends BaseRequest
      *
      * @return array
      */
-    public function messages()
+    public function messages(): array
     {
         return [
             'required' => ':attribute é obrigatório',
@@ -151,7 +150,7 @@ class {$model}Request extends BaseRequest
      *
      * @return array
      */
-    public function attributes()
+    public function attributes(): array
     {
         return [
             'title' => 'Título',
@@ -160,7 +159,7 @@ class {$model}Request extends BaseRequest
     }
 }
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Http' . DIRECTORY_SEPARATOR . 'Requests' . DIRECTORY_SEPARATOR . $model . 'Request.php', $request);
+        file_put_contents(app_path("Http/Requests/{$model}Request.php"), $request);
     }
 
     /**
@@ -168,7 +167,7 @@ EOF;
      *
      * @param string $model
      */
-    private function makeService(string $model)
+    private function makeService(string $model): void
     {
         $repository = $model . 'Repository';
         $service = <<<EOF
@@ -177,12 +176,11 @@ EOF;
 namespace App\Services;
 
 use App\Repositories\\$repository;
-use LaravelAux\BaseService;
 
 class {$model}Service extends BaseService
 {
     /**
-     * UserService constructor.
+     * {$model}Service constructor.
      *
      * @param {$repository} \$repository
      */
@@ -192,7 +190,7 @@ class {$model}Service extends BaseService
     }
 }
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Services' . DIRECTORY_SEPARATOR . $model . 'Service.php', $service);
+        file_put_contents(app_path("Services/{$model}Service.php"), $service);
     }
 
     /**
@@ -200,7 +198,7 @@ EOF;
      *
      * @param string $model
      */
-    private function makeRepository(string $model)
+    private function makeRepository(string $model): void
     {
         $repository = <<<EOF
 <?php
@@ -208,12 +206,11 @@ EOF;
 namespace App\Repositories;
 
 use App\Models\\$model;
-use LaravelAux\BaseRepository;
 
 class {$model}Repository extends BaseRepository
 {
     /**
-     * UserService constructor.
+     * {$model}Repository constructor.
      *
      * @param {$model} \$model
      */
@@ -223,7 +220,7 @@ class {$model}Repository extends BaseRepository
     }
 }
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Repositories' . DIRECTORY_SEPARATOR . $model . 'Repository.php', $repository);
+        file_put_contents(app_path("Repositories/{$model}Repository.php"), $repository);
     }
 
     /**
@@ -231,7 +228,7 @@ EOF;
      *
      * @param string $model
      */
-    private function makeModel(string $model)
+    private function makeModel(string $model): void
     {
         $modelContent = <<<EOF
 <?php
@@ -239,9 +236,12 @@ EOF;
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class {$model} extends Model
 {
+    use SoftDeletes;
+
     protected \$guarded = [
         'id'
     ];
@@ -251,7 +251,7 @@ class {$model} extends Model
     ];
 }
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Models' . DIRECTORY_SEPARATOR . $model . '.php', $modelContent);
+        file_put_contents(app_path("Models/{$model}.php"), $modelContent);
     }
 
     /**
@@ -259,7 +259,7 @@ EOF;
      *
      * @param string $model
      */
-    public function makeMigration(string $model)
+    public function makeMigration(string $model): void
     {
         $plural = Str::plural($model);
         $lower = strtolower($plural);
@@ -270,17 +270,17 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Database\Migrations\Migration;
 
-class Create{$plural}Table extends Migration
+return new class extends Migration
 {
     /**
      * Run the migrations.
      *
      * @return void
      */
-    public function up()
+    public function up(): void
     {
         Schema::create('{$lower}', function (Blueprint \$table) {
-            \$table->increments('id');
+            \$table->id();
             \$table->string('title');
             \$table->string('description');
             \$table->timestamps();
@@ -293,12 +293,12 @@ class Create{$plural}Table extends Migration
      *
      * @return void
      */
-    public function down()
+    public function down(): void
     {
         Schema::dropIfExists('{$lower}');
     }
-}
+};
 EOF;
-        file_put_contents(base_path() . DIRECTORY_SEPARATOR . 'database' . DIRECTORY_SEPARATOR . 'migrations' . DIRECTORY_SEPARATOR . date('Y_m_d_His') . '_create_' . $lower . '_table.php', $migration);
+        file_put_contents(database_path("migrations/" . date('Y_m_d_His') . "_create_{$lower}_table.php"), $migration);
     }
 }

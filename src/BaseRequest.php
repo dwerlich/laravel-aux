@@ -13,7 +13,7 @@ abstract class BaseRequest extends FormRequest
      *
      * @return bool
      */
-    public function authorize()
+    public function authorize(): bool
     {
         return true;
     }
@@ -23,38 +23,41 @@ abstract class BaseRequest extends FormRequest
      *
      * @return array
      */
-    public function rules()
+    public function rules(): array
     {
         return [];
     }
 
     /**
-     * Validation messages
+     * Custom validation messages.
      *
      * @return array
      */
-    public function messages()
+    public function messages(): array
     {
         return [];
     }
 
     /**
-     * Attributes Name
+     * Custom attributes for validator errors.
      *
      * @return array
      */
-    public function attributes()
+    public function attributes(): array
     {
         return [];
     }
 
     /**
-     * Return errors array if Error is disparate
+     * Handle a failed validation attempt.
      *
      * @param Validator $validator
+     * @throws HttpResponseException
      */
-    protected function failedValidation(Validator $validator)
+    protected function failedValidation(Validator $validator): void
     {
-        throw new HttpResponseException(response()->json($validator->errors(), 422));
+        throw new HttpResponseException(response()->json([
+            'errors' => $validator->errors(),
+        ], 422));
     }
 }

@@ -24,7 +24,7 @@
             http://localhost:8000/api/v1/users?orderByDesc[]=id
         
     Get element by id
-        http://localhost:8000/api/v1/users?id=1
+        http://localhost:8000/api/v1/users/1
 
     Bring with relationships
         http://localhost:8000/api/v1/users?with[]=company

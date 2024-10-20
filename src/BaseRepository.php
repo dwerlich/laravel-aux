@@ -52,15 +52,15 @@ abstract class BaseRepository
      */
     public function findBy(array $data)
     {
-        $return = $this->model->all();
+        $query = $this->model->newQuery();
         foreach ($data as $key => $value) {
             if (is_array($value)) {
-                $return = $return->whereIn($key, $value);
-                continue;
+                $query = $query->whereIn($key, $value);
+            } else {
+                $query = $query->where($key, $value);
             }
-            $return = $return->where($key, $value);
         }
-        return $return->first();
+        return $query->first();
     }
 
     /**
@@ -72,7 +72,7 @@ abstract class BaseRepository
      */
     public function whereBetween(string $key, array $value)
     {
-        return $this->model::whereBetween($key, $value);
+        return $this->model::whereBetween($key, $value)->get();
     }
 
     /**
@@ -87,7 +87,7 @@ abstract class BaseRepository
         if ($id) {
             return $this->model::with($relations)->where('id', $id)->first();
         }
-        return $this->model::with($relations);
+        return $this->model::with($relations)->get();
     }
 
     /**
@@ -113,9 +113,7 @@ abstract class BaseRepository
     }
 
     /**
-     * Method to Get the first occurrence or Create an Model Object if that doesn't exists
-     * Obs. The difference between that method and FirstOrNew, it's because in that method, eloquent persist the information
-     * on database.
+     * Method to Get the first occurrence or Create an Model Object if that doesn't exist
      *
      * @param array $condition
      * @param array $data
@@ -127,9 +125,7 @@ abstract class BaseRepository
     }
 
     /**
-     * Method to Get the first occurrence or Create an Model Object if that doesn't exists
-     * Obs. The difference between that method and FirstOrCreate, it's because in that method, eloquent doesn't persist the information
-     * on database.
+     * Method to Get the first occurrence or Create an Model Object if that doesn't exist (without persisting)
      *
      * @param array $condition
      * @param array $data
@@ -149,7 +145,8 @@ abstract class BaseRepository
      */
     public function update(array $data, int $id)
     {
-        return $this->model->find($id)->update($data);
+        $model = $this->model->find($id);
+        return $model ? $model->update($data) : null;
     }
 
     /**
@@ -160,7 +157,7 @@ abstract class BaseRepository
      */
     public function delete(int $id)
     {
-        return $this->model->find($id)->delete();
+        return $this->model->find($id)?->delete();
     }
 
     /**
@@ -213,48 +210,7 @@ abstract class BaseRepository
      */
     public function withRelationIfExists($query, $relations)
     {
-        $request = request();
-        $reflection = new \ReflectionClass($this->model);
-        $allRelations = array_column($reflection->getMethods(), 'name');
-
-        if (is_array($relations)) {
-            foreach ($relations as $relation) {
-                $conditions = $request->get(str_replace('.', '_', $relation));
-                if (!in_array($relation, $allRelations) && !is_int(strpos($relation, '.'))) {
-                    continue;
-                }
-                if (!$conditions) {
-                    $query = $query->with($relation);
-                    continue;
-                }
-                $query = $query->with($relation)->whereHas($relation, function ($query) use ($conditions, $relation) {
-                    foreach ($conditions as $column => $condition) {
-                        if (is_array($condition)) {
-                            foreach ($condition as $value) {
-                                $query = $this->childrenWhere($query, $column, $value, $relation);
-                            }
-                            continue;
-                        }
-                        $query = $this->childrenWhere($query, $column, $condition, $relation);
-                    }
-                });
-            }
-        } else {
-            if (!in_array($relations, $allRelations)) {
-                return $query;
-            }
-            $conditions = $request->get($relations);
-            if (!$conditions) {
-                $query = $query->with($relations);
-                return $query;
-            }
-            $query = $query->with($relations)->whereHas($relations, function ($query) use ($conditions) {
-                foreach ($conditions as $column => $condition) {
-                    $query = $this->childrenWhere($query, $column, $condition);
-                }
-            });
-        }
-        return $query;
+        return $this->filterRelations($query, $relations);
     }
 
     /**
@@ -267,57 +223,11 @@ abstract class BaseRepository
      */
     public function withRelationIfNotEmpty($query, $relations)
     {
-        $request = request();
-        $reflection = new \ReflectionClass($this->model);
-        $allRelations = array_column($reflection->getMethods(), 'name');
-
-        if (is_array($relations)) {
-            foreach ($relations as $relation) {
-                $conditions = $request->get($relation);
-                if (!in_array($relation, $allRelations) && !is_int(strpos($relation, '.'))) {
-                    continue;
-                }
-
-                if (!$conditions) {
-                    $query = $query->has($relation)->with($relation);
-                    continue;
-                }
-
-                $query = $query->has($relation)->with($relation)->whereHas($relation, function ($query) use ($conditions) {
-                    foreach ($conditions as $column => $condition) {
-                        if (is_array($condition)) {
-                            foreach ($condition as $value) {
-                                $query->where($column, $value);
-                            }
-                            continue;
-                        }
-
-                        $query->where($column, $condition);
-                    }
-                });
-            }
-        } else {
-            if (!in_array($relations, $allRelations)) {
-                return $query;
-            }
-
-            $conditions = $request->get($relations);
-            if (!$conditions) {
-                $query = $query->has($relations)->with($relations);
-
-                return $query;
-            }
-            $query = $query->has($relations)->with($relations)->whereHas($relations, function ($query) use ($conditions) {
-                foreach ($conditions as $column => $condition) {
-                    $query->where($column, $condition);
-                }
-            });
-        }
-        return $query;
+        return $this->filterRelations($query, $relations, true);
     }
 
     /**
-     * Method to get rows who doesn't have relation (It's empty)
+     * Method to get rows who don't have relation (It's empty)
      *
      * @param $query
      * @param $relations
@@ -326,27 +236,54 @@ abstract class BaseRepository
      */
     public function withRelationEmpty($query, $relations)
     {
+        return $this->filterRelations($query, $relations, false, true);
+    }
+
+    /**
+     * Helper to filter relations dynamically
+     *
+     * @param $query
+     * @param $relations
+     * @param bool $notEmpty
+     * @param bool $empty
+     * @return mixed
+     * @throws \ReflectionException
+     */
+    private function filterRelations($query, $relations, $notEmpty = false, $empty = false)
+    {
         $reflection = new \ReflectionClass($this->model);
         $allRelations = array_column($reflection->getMethods(), 'name');
 
         if (is_array($relations)) {
             foreach ($relations as $relation) {
-                if (!in_array($relation, $allRelations) && !is_int(strpos($relation, '.'))) {
+                if (!in_array($relation, $allRelations) && !str_contains($relation, '.')) {
                     continue;
                 }
-                $query = $query->doesnthave($relation);
+                if ($empty) {
+                    $query->doesnthave($relation);
+                } elseif ($notEmpty) {
+                    $query->has($relation)->with($relation);
+                } else {
+                    $query->with($relation);
+                }
             }
         } else {
             if (!in_array($relations, $allRelations)) {
                 return $query;
             }
-            $query = $query->doesnthave($relations);
+            if ($empty) {
+                $query->doesnthave($relations);
+            } elseif ($notEmpty) {
+                $query->has($relations)->with($relations);
+            } else {
+                $query->with($relations);
+            }
         }
         return $query;
     }
 
     /**
-     * Method to filter in Children Table - That method is valid only in Abstract Repository (withRelationIfExists)
+     * Method to filter in Children Table - Used only in Abstract Repository
      *
      * @param $query
      * @param $key
@@ -355,7 +292,7 @@ abstract class BaseRepository
      */
     private function childrenWhere($query, $key, $value, $relation = null)
     {
-        $query->where(function ($subquery) use ($query, $key, $value, $relation) {
+        return $query->where(function ($subquery) use ($query, $key, $value, $relation) {
             if (is_array($value)) {
                 foreach ($value as $column => $condition) {
                     $subquery->whereRaw("LOWER({$key}) LIKE LOWER(?)", '%' . $condition . '%');
@@ -363,26 +300,24 @@ abstract class BaseRepository
                 return $query;
             }
 
-            if($relation){
-
-                try{
-                    $relationModel = $this->model->{$relation}(); // Returns a Relations subclass like BelongsTo or HasOne.
+            if ($relation) {
+                try {
+                    $relationModel = $this->model->{$relation}(); // Returns a Relations subclass
                     $relatedModel = $relationModel->getRelated(); // Returns a new empty Model
                     $tableName = $relatedModel->getTable();
 
                     $type = DB::connection()->getDoctrineColumn($tableName, $key)->getType()->getName();
 
-                } catch(Exception $e){
+                } catch (Exception $e) {
                     $type = null;
                 }
 
-                if(isset($type) && $type == 'integer'){
+                if (isset($type) && $type == 'integer') {
                     $subquery->whereRaw($key, $value);
                 } else {
                     $subquery->whereRaw("LOWER({$key}) LIKE LOWER(?)", '%' . $value . '%');
                 }
             }
         });
-        return $query;
     }
 }

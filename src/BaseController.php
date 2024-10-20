@@ -36,7 +36,7 @@ abstract class BaseController
      * Method to get Model Objects
      *
      * @param Request $request
-     * @return \Illuminate\Database\Eloquent\Collection|static[]
+     * @return Collection|static[]
      */
     public function index(Request $request)
     {
@@ -52,67 +52,66 @@ abstract class BaseController
     public function store(Request $request)
     {
         $this->validation();
-        if ($new = $this->service->create($request->all())) {
-            return response()->json($new, 200);
+        if ($this->service->create($request->all())) {
+            return response()->json(['message' => 'Cadastro realizado!'], 201);
         }
-        return response()->json('Não foi possível adicionar o registro', 500);
+        return response()->json(['message' => 'Não foi possível adicionar o registro'], 500);
     }
 
     /**
      * Method to Update Model Object
      *
      * @param Request $request
-     * @param $id
+     * @param int $id
      * @return mixed
      */
     public function update(Request $request, int $id)
     {
         $this->validation('PUT');
         if ($this->service->update($request->all(), $id)) {
-            return response()->json('Registro atualizado com sucesso', 200);
+            return response()->json(['message' => 'Registro atualizado'], 200);
         }
-        return response()->json('Não foi possível atualizar o registro', 500);
+        return response()->json(['message' => 'Não foi possível atualizar o registro'], 500);
     }
 
     /**
      * Method to get Model Object
      *
-     * @param $id
-     * @param Request $request
-     * @return BaseService[]|\Illuminate\Database\Eloquent\Collection
+     * @param int $id
+     * @return BaseService[]|Collection
      */
-    public function show(int $id, Request $request)
+    public function show(int $id)
     {
-        $request->merge(['id' => $id]);
-        return $this->service->get('*', $request);
+        return $this->service->show($id);
     }
 
     /**
      * Method to delete Model Object
      *
-     * @param $id
-     * @return array
+     * @param int $id
+     * @return \Illuminate\Http\JsonResponse
      * @throws \Exception
      */
-    public function destroy($id)
+    public function destroy(int $id)
     {
         if ($this->service->delete($id)) {
-            return response()->json('Registro removido com sucesso', 200);
+            return response()->json(['message' => 'Registro excluído'], 200);
         }
-        return response()->json('Não foi possível remover o registro', 500);
+        return response()->json(['message' => 'Não foi possível excluir o registro'], 500);
     }
 
     /**
      * Method to validate Request
      *
-     * @param $method
-     * @return array|void
+     * @param string|null $method
+     * @return void
      */
     protected function validation($method = null)
     {
         $validator = Validator::make(request()->all(), $this->request->rules($method), $this->request->messages(), $this->request->attributes());
+
         if ($validator->fails()) {
-            throw new HttpResponseException(response()->json($validator->errors()->toArray(), 500));
+            throw new HttpResponseException(response()->json($validator->errors()->toArray(), 422));
         }
     }
 }
